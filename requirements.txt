@@ -1,10 +1,12 @@
 numpy
 pandas
 matplotlib
+
 scikit-learn
-ruptures
-dcor
-ydata-profiling
+
+pytest
+
 setuptools<81
+
 
 
