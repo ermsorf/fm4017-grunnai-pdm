@@ -1,20 +1,11 @@
-"""Small, runnable regression template for the Grunnai signal data.
-
-Run from this directory with:
-
-	python model.py
-
-Change TARGET_SIGNAL and FEATURE_SIGNALS below to train on another set of
-signals.
-"""
-
 from pathlib import Path
 
 import joblib
 import pandas as pd
 import matplotlib.pyplot as plt
 import ruptures as rpt
-
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 
 DATA_FOLDER = (
@@ -38,72 +29,145 @@ def load_signal(file_path: Path) -> pd.Series:
 	return signal.dropna().set_index("timestamp")[file_path.stem].sort_index()
 
 
-def detect_change_points(sensor_signal: pd.Series) -> list[int]:
-	"""Detect signal change points using kernel-based change-point detection."""
+def detect_change_points(
+	sensor_signal: pd.Series,
+	n_bkps: int = 50,
+) -> list[int]:
 	detector = rpt.KernelCPD(
 		kernel="rbf",
 		min_size=50,
 		jump=10,
 	).fit(sensor_signal.to_numpy())
-	return detector.predict(n_bkps=5)
-	
+	return detector.predict(n_bkps=n_bkps)
 
 
-# def build_dataset() -> pd.DataFrame:
-# 	"""Read and timestamp-align the target and feature signals."""
-# 	target = load_signal(DATA_FOLDER / TARGET_SIGNAL).rename("target")
-# 	features = [load_signal(DATA_FOLDER / name) for name in FEATURE_SIGNALS]
-# 	dataset = (
-# 		pd.concat([target, *features], axis=1)
-# 		.sort_index()
-# 		.dropna()
-# 	)
 
-# 	if dataset.empty:
-# 		raise ValueError("No complete rows were found after aligning the signals.")
-# 	return dataset
+def calculate_segments_features(
+		power: pd.Series,
+		speed: pd.Series,
+		upper_bearing_temp: pd.Series,
+		lower_bearing_temp: pd.Series,
+		change_points: list[int]
+	) -> pd.DataFrame:
+	signals = pd.concat(
+		{
+			"power": power,
+			"speed": speed,
+			"upper_bearing_temp": upper_bearing_temp,
+			"lower_bearing_temp": lower_bearing_temp
+		}, axis=1).sort_index()
+
+	bounds = [0] + change_points
+	rows = []
+
+	for segments_id, (start,end) in enumerate(zip(bounds[:-1],bounds[1:])):
+		start_time = power.index[start]
+		end_time = power.index[end-1]
+
+		segment = signals.loc[start_time:end_time]
+
+		rows.append({
+			"segment_id": segments_id,
+			"start_time": start_time,
+			"end_time": end_time,
+			"power_mean": segment["power"].mean(),
+			"power_std": segment["power"].std(),
+			"speed_mean": segment["speed"].mean(),
+			"speed_std": segment["speed"].std(),
+			"upper_b_temp_mean": segment["upper_bearing_temp"].mean(),
+			"upper_b_temp_std": segment["upper_bearing_temp"].std(),
+			"lower_b_temp_mean": segment["lower_bearing_temp"].mean(),
+			"lower_b_temp_std": segment["lower_bearing_temp"].std()
+		})
+	return pd.DataFrame(rows)
+
+
+def detect_segment_anomalies(
+	segments_features: pd.DataFrame,
+	contamination: float = 0.2,
+) -> pd.DataFrame:
+	"""Flag unusual operating segments using their calculated features."""
+	feature_columns = [
+		"power_mean",
+		"power_std",
+		"speed_mean",
+		"speed_std",
+		"upper_b_temp_mean",
+		"upper_b_temp_std",
+		"lower_b_temp_mean",
+		"lower_b_temp_std",
+	]
+	valid = segments_features.dropna(subset=feature_columns).copy()
+
+	if len(valid) < 10:
+		print("Warning: fewer than 10 segments; anomaly results are exploratory only.")
+
+	scaler = StandardScaler()
+	features_scaled = scaler.fit_transform(valid[feature_columns])
+	detector = IsolationForest(
+		contamination=contamination,
+		n_estimators=200,
+		random_state=42,
+	)
+
+	valid["anomaly"] = detector.fit_predict(features_scaled)
+	valid["anomaly_score"] = -detector.score_samples(features_scaled)
+	return valid
+
+		
+
 
 def plot_signals_change_points(datasignal: pd.Series, change_points: list[int]) -> None:
-	"""Plot one signal and its detected change points."""
-	plt.figure(figsize=(12, 6))
+	"""Plot the complete signal with every detected segment highlighted."""
+	fig, ax = plt.subplots(figsize=(16, 7))
 	plt.plot(datasignal.index, datasignal.values, label=datasignal.name)
-	for point in change_points[:-1]:
-		plt.axvline(datasignal.index[point], color="red", linestyle="--")
-	plt.title("Aligned Signals")
-	plt.xlabel("Time")
-	plt.ylabel("Value")
-	plt.legend()
-	plt.grid()
+
+	bounds = [0] + change_points
+	for segment_id, (start, end) in enumerate(zip(bounds[:-1], bounds[1:])):
+		start_time = datasignal.index[start]
+		end_time = datasignal.index[end - 1]
+		if segment_id % 2 == 0:
+			ax.axvspan(start_time, end_time, color="lightblue", alpha=0.2)
+		if end < len(datasignal):
+			ax.axvline(
+				datasignal.index[end],
+				color="red",
+				linestyle="--",
+				linewidth=1,
+			)
+		ax.text(
+			(start_time + (end_time - start_time) / 2),
+			0.98,
+			f"S{segment_id}",
+			transform=ax.get_xaxis_transform(),
+			ha="center",
+			va="top",
+		)
+
+	ax.set_title("Signal Segments Detected by KernelCPD")
+	ax.set_xlabel("Time")
+	ax.set_ylabel("Value")
+	ax.legend()
+	ax.grid()
+	fig.autofmt_xdate()
 	plt.show()
-
-# def train_model(dataset: pd.DataFrame) -> RandomForestRegressor:
-# 	"""Train on the first 80 percent of time-ordered samples and evaluate the rest."""
-# 	split_index = int(len(dataset) * 0.8)
-# 	if split_index < 1 or split_index >= len(dataset):
-# 		raise ValueError("The dataset needs at least two complete rows.")
-
-# 	features = dataset.drop(columns="target")
-# 	target = dataset["target"]
-# 	train_features, test_features = features.iloc[:split_index], features.iloc[split_index:]
-# 	train_target, test_target = target.iloc[:split_index], target.iloc[split_index:]
-
-# 	model = RandomForestRegressor(
-# 		n_estimators=100,
-# 		random_state=42,
-# 		n_jobs=-1,
-# 	)
-# 	model.fit(train_features, train_target)
-# 	predictions = model.predict(test_features)
-
-# 	print(f"Rows: {len(dataset):,} | train: {len(train_features):,} | test: {len(test_features):,}")
-# 	print(f"MAE: {mean_absolute_error(test_target, predictions):.4f}")
-# 	print(f"R2:  {r2_score(test_target, predictions):.4f}")
-# 	return model
 
 
 if __name__ == "__main__":
-	sensor_signal = load_signal(DATA_FOLDER / "Scada.GRUN.AGG1.G1.MV.M_I.csv")
-	change_points = detect_change_points(sensor_signal)
-	plot_signals_change_points(sensor_signal, change_points)
-	
-	
+	power = load_signal(DATA_FOLDER / "Scada.GRUN.AGG1.G1.MV.M_P.csv")
+	speed = load_signal(DATA_FOLDER / "Scada.GRUN.AGG1.TURB1.MV.M_TURTALL.csv")
+	upper_bearing_temp = load_signal(DATA_FOLDER / "Scada.GRUN.AGG1.G1.SSSTYLAG.M_LAGTMP.csv")
+	lower_bearing_temp = load_signal(DATA_FOLDER / "Scada.GRUN.AGG1.G1.DSSTYLAG.M_LAGTMP.csv")
+
+	change_points = detect_change_points(power, n_bkps=50)
+
+	segments_features = calculate_segments_features(power, speed, upper_bearing_temp, lower_bearing_temp, change_points)
+
+	segments_with_anomalies = detect_segment_anomalies(segments_features)
+	print("\nSegment anomaly results:")
+	print(
+		segments_with_anomalies[
+			["segment_id", "start_time", "end_time", "anomaly", "anomaly_score"]
+		].to_string(index=False)
+	)
+
