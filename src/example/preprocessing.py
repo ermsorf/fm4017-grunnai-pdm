@@ -1,10 +1,6 @@
-<<<<<<< HEAD
-from sklearn.preprocessing import StandardScaler
-=======
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from pathlib import Path
->>>>>>> d735ada (Samples count per day)
 import pandas as pd
 import os
 
@@ -27,9 +23,6 @@ def preprocess_data(data_directory):
     feature_columns = cleaned_data.columns[:-1]  # Assuming last column is the target
     cleaned_data[feature_columns] = scaler.fit_transform(cleaned_data[feature_columns])
 
-<<<<<<< HEAD
-    return cleaned_data
-=======
     return cleaned_data
 
 def samples_per_day_count(file_path: Path) -> pd.Series:
@@ -60,4 +53,3 @@ if __name__ == "__main__":
     plt.show()
 
     
->>>>>>> d735ada (Samples count per day)
