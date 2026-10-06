@@ -51,7 +51,7 @@ def select_data_files(
 
 
 def load_signal(file_path: str | Path) -> pd.DataFrame:
-    """Load one raw signal CSV into normalized timestamp/value columns."""
+    """Load one signal CSV into normalized timestamp/value columns."""
     signal = pd.read_csv(
         file_path,
         header=None,
@@ -64,50 +64,8 @@ def load_signal(file_path: str | Path) -> pd.DataFrame:
 
 
 def load_signals(file_paths: Iterable[str | Path]) -> dict[Path, pd.DataFrame]:
-    """Load selected raw signal files once, keyed by their paths."""
+    """Load selected signal files once, keyed by their paths."""
     return {
         Path(file_path): load_signal(file_path)
         for file_path in file_paths
     }
-
-
-class DataLoader:
-    def __init__(self, train_data_path=None, validation_data_path=None):
-        self.train_data_path = train_data_path
-        self.validation_data_path = validation_data_path
-
-    def load_data(
-        self,
-        data_path: str | Path,
-        *,
-        filename_contains: str | Iterable[str] | None = None,
-        filename_exclude: str | Iterable[str] | None = None,
-        filename_matches: str | re.Pattern[str] | None = None,
-        recursive: bool = False,
-    ) -> pd.DataFrame:
-        """Load one CSV or concatenate selected CSV files from a directory."""
-        files = select_data_files(
-            data_path,
-            filename_contains=filename_contains,
-            filename_exclude=filename_exclude,
-            filename_matches=filename_matches,
-            recursive=recursive,
-        )
-        if not files:
-            raise FileNotFoundError(f"No CSV files matched in {data_path}")
-        return pd.concat((pd.read_csv(file_path) for file_path in files), ignore_index=True)
-
-    def load_signals(self, file_paths: Iterable[str | Path]) -> dict[Path, pd.DataFrame]:
-        return load_signals(file_paths)
-
-    def load_train_data(self, data_path=None, **filters):
-        path = self.train_data_path if data_path is None else data_path
-        if path is None:
-            raise ValueError("A training data path is required")
-        return self.load_data(path, **filters)
-
-    def load_validation_data(self, data_path=None, **filters):
-        path = self.validation_data_path if data_path is None else data_path
-        if path is None:
-            raise ValueError("A validation data path is required")
-        return self.load_data(path, **filters)
