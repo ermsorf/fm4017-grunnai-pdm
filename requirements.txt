@@ -1,8 +1,11 @@
 numpy
 pandas
 matplotlib
-
+shutil
+pathlib
 scikit-learn
+torch
+xgboost>=2.0
 
 pytest
 
