@@ -4,10 +4,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+import os
 import numpy as np
 import pandas as pd
 import src.config
-from src.data_loader import load_signals, select_data_files
+from src.data_handling import load_signals, select_data_files
 
 """
 Each sensor only stores a new sample when its value has changed by more than a specified threshold. As a result, the raw sensor data is irregularly sampled.
@@ -41,20 +42,27 @@ timestamp, sensor_1_val, sensor_1_mask, sensor_1_age
 """
 
 
-def step_interpolate_files(file_paths: Iterable[str | Path], output_folder: str | Path | None = None) -> list[Path]:
-    """Convert irregular sensor files to ten-second, forward-filled signals.
 
-    Each input file is expected to contain the raw ``timestamp`` and ``value``
-    columns produced by :func:`src.data_loader.load_signal`. Samples are
-    assigned to the ceiling of their ten-second interval; when several samples
-    share an interval, the last one in timestamp order is retained.
+def step_interpolate_files(
+    file_paths: Iterable[str | Path],
+    output_folder: str | Path | None = None,
+    interval="10s",
+    start_time="2024-06-02 00:00:00",
+) -> list[Path]:
+    """Convert irregular sensor files to regularly sampled, forward-filled signals.
+
+    All output files start at start_time. The last measurement at or before
+    start_time initializes forward-filling, but is not marked as a new
+    measurement unless its timestamp equals start_time.
     """
     destination_folder = (
         Path(output_folder) if output_folder is not None else Path(__file__).parent / "data"
     )
     destination_folder.mkdir(parents=True, exist_ok=True)
 
+    start = pd.Timestamp(start_time)
     written_files: list[Path] = []
+
     for file_path in file_paths:
         source = Path(file_path)
         signal = load_signals([source])[source]
@@ -62,25 +70,48 @@ def step_interpolate_files(file_paths: Iterable[str | Path], output_folder: str 
             "timestamp",
             kind="mergesort",
         )
+
         if signal.empty:
             raise ValueError(f"Signal file contains no valid samples: {source}")
 
-        signal["timestamp"] = signal["timestamp"].dt.ceil("10s")
+        signal["timestamp"] = signal["timestamp"].dt.ceil(interval)
         signal = signal.drop_duplicates("timestamp", keep="last").set_index("timestamp")
 
+        # Keep the last measurement at or before the requested start time.
+        previous = signal.loc[signal.index <= start].tail(1)
+        future = signal.loc[signal.index > start]
+
+        if previous.empty:
+            raise ValueError(
+                f"No measurement at or before {start} for sensor: {source}"
+            )
+
+        end = future.index.max() if not future.empty else start
+
         timestamps = pd.date_range(
-            start=signal.index.min(),
-            end=signal.index.max(),
-            freq="10s",
+            start=start,
+            end=end,
+            freq=interval,
             name="timestamp",
         )
-        result = signal[["value"]].reindex(timestamps)
+
+        # Combine the initial value with future measurements.
+        combined = pd.concat([previous, future])
+        combined = combined[~combined.index.duplicated(keep="last")]
+
+        result = combined[["value"]].reindex(
+            combined.index.union(timestamps)
+        ).sort_index()
+
         measured = result["value"].notna()
         result["value"] = result["value"].ffill()
         result["mask"] = measured.astype("int64")
         result["age"] = (
             (~measured).groupby(measured.cumsum()).cumcount().astype("int64")
         )
+
+        # Keep only the common timeline.
+        result = result.reindex(timestamps)
 
         sensor_name = source.stem
         result = result.rename(
@@ -96,7 +127,6 @@ def step_interpolate_files(file_paths: Iterable[str | Path], output_folder: str 
         written_files.append(destination)
 
     return written_files
-
 
 def remove_negative_values(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -165,48 +195,88 @@ def remove_zeros(
     return written_files
 
 
+def z_normalize(df: pd.DataFrame, value_column: str) -> pd.DataFrame:
+    """Z-normalize the specified value column in the dataframe."""
+    if value_column not in df.columns:
+        raise ValueError(f"Expected a '{value_column}' column in the dataframe")
 
+    mean = df[value_column].mean()
+    std = df[value_column].std()
+    df[value_column] = (df[value_column] - mean) / std
+    return df
 
+def z_normalize_files(
+    input_paths: Iterable[str | Path],
+    value_column: str,
+    output_folder: str | Path | None = None,
+) -> list[Path]:
+    """Z-normalize the specified value column in selected signal CSV files."""
+    destination_folder = (
+        Path(output_folder) if output_folder is not None else Path(__file__).parent / "data"
+    )
+    destination_folder.mkdir(parents=True, exist_ok=True)
+
+    written_files = []
+    for csv_file in input_paths:
+        csv_file = Path(csv_file)
+        signal = z_normalize(load_signals([csv_file])[csv_file], value_column)
+        destination = destination_folder / csv_file.name
+        signal.to_csv(destination, index=False)
+        written_files.append(destination)
+
+    return written_files
 
 
 
 
 if __name__ == "__main__":
-    
+
+    print("Starting preprocessing...")
+    process_folder = os.path.join(src.config.DATA_PROCESSED, "2024-06-02_2024-10-31_stepinterp_10s")
     csv_files = select_data_files(
         src.config.DATA_RAW_2024,
         filename_contains=["AGG2", "Hydrocord"],
         filename_exclude=["Hydrocord.Eta"],
     )
     for csv_file in csv_files:
-        shutil.copy(csv_file, Path(__file__).parent / "data" / csv_file.name)
+        shutil.copy(csv_file, os.path.join(process_folder, csv_file.name))
 
     files_remove_negative = select_data_files(
-        Path(__file__).parent / "data",
+        process_folder,
         filename_contains=["AGG2", "Hydrocord"],
     )
-
+    print("Removing negative")
     remove_negative(
         files_remove_negative,
-        output_folder=Path(__file__).parent / "data",
+        output_folder=process_folder,
     )
     files_remove_zeros = select_data_files(
-        Path(__file__).parent / "data",
+        process_folder,
         filename_contains=["AGG2", "Hydrocord"],
         filename_exclude=["VIBR", "NALER"],
     )
+    print("Removing zeros")
     remove_zeros(
         files_remove_zeros,
-        output_folder=Path(__file__).parent / "data",
+        output_folder=process_folder,
     )
-    print("Done removing negative and zero values from selected CSV files.")
 
     files = select_data_files(
-        Path(__file__).parent / "data",
+        process_folder,
         filename_contains=["AGG2", "Hydrocord"],
     )
-    step_interpolate_files(files, output_folder=Path(__file__).parent / "data" / "step_interp_10s")
-    print("Done step-interpolating selected CSV files to 10-second intervals.")
+
+    print("Z-normalization.")
+    z_normalize_files(
+        files,
+        value_column="value",
+        output_folder=process_folder,
+    )
+
+    print("Step-interpolating.")
+    step_interpolate_files(files, output_folder=process_folder, interval="10s", start_time="2024-06-02 00:00:00")
+    print("Preprocessing Complete.")
+
     
 
 
