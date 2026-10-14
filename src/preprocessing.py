@@ -203,7 +203,8 @@ def z_normalize(df: pd.DataFrame, value_column: str) -> pd.DataFrame:
     mean = df[value_column].mean()
     std = df[value_column].std()
     df[value_column] = (df[value_column] - mean) / std
-    return df
+    params = {"mean": mean, "std": std}
+    return df, params
 
 def z_normalize_files(
     input_paths: Iterable[str | Path],
@@ -216,14 +217,20 @@ def z_normalize_files(
     )
     destination_folder.mkdir(parents=True, exist_ok=True)
 
+    normalization_parameters = {}
+
     written_files = []
     for csv_file in input_paths:
         csv_file = Path(csv_file)
-        signal = z_normalize(load_signals([csv_file])[csv_file], value_column)
+        signal, params = z_normalize(load_signals([csv_file])[csv_file], value_column)
+        normalization_parameters[csv_file.name] = params
         destination = destination_folder / csv_file.name
         signal.to_csv(destination, index=False)
         written_files.append(destination)
-
+    normalization_params_path = destination_folder / "normalization_parameters.json"
+    with open(normalization_params_path, "w") as f:
+        import json
+        json.dump(normalization_parameters, f, indent=4)
     return written_files
 
 
