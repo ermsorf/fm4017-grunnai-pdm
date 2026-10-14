@@ -11,4 +11,4 @@ DATA_PROCESSED = os.path.join(DATA_FOLDER, 'processed')  # subject to change
 
 TRAIN_DATA_PATH = os.path.join(BASE_DIR, 'data', 'train') # subject to change
 VALIDATION_DATA_PATH = os.path.join(BASE_DIR, 'data', 'validation') # subject to change
-MODEL_SAVE_PATH = os.path.join(BASE_DIR, 'models')
+MODEL_SAVE_PATH = os.path.join(BASE_DIR, "src", 'models')
