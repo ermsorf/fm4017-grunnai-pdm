@@ -239,9 +239,9 @@ def z_normalize_files(
 if __name__ == "__main__":
 
     print("Starting preprocessing...")
-    process_folder = os.path.join(src.config.DATA_PROCESSED, "2024-06-02_2024-10-31_stepinterp_10s")
+    process_folder = os.path.join(src.config.DATA_PROCESSED, "2025-06-02_2025-10-31_stepinterp_2s")
     csv_files = select_data_files(
-        src.config.DATA_RAW_2024,
+        src.config.DATA_RAW_2025,
         filename_contains=["AGG2", "Hydrocord"],
         filename_exclude=["Hydrocord.Eta"],
     )
@@ -281,7 +281,7 @@ if __name__ == "__main__":
     )
 
     print("Step-interpolating.")
-    step_interpolate_files(files, output_folder=process_folder, interval="10s", start_time="2024-06-02 00:00:00")
+    step_interpolate_files(files, output_folder=process_folder, interval="2s", start_time="2025-06-02 00:00:00")
     print("Preprocessing Complete.")
 
     
