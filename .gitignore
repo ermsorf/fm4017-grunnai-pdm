@@ -223,3 +223,7 @@ __marimo__/
 
 #Trained model files
 *.joblib
+*.keras
+
+#Model Scalar Stuff
+*.pkl
