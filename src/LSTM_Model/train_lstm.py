@@ -12,7 +12,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.multioutput import MultiOutputRegressor
 from xgboost import XGBRegressor
 
-from src.data_analysis.featureExtraction import load_signal
+from src.data_analysis.data_pre_processing import load_signal
 
 DATA_FOLDER = (
     Path(__file__).resolve().parents[2]
