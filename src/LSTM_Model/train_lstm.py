@@ -2,7 +2,6 @@ from pathlib import Path
 from math import sqrt
 import tensorflow as tf
 import joblib
-import json
 
 
 import numpy as np
@@ -47,6 +46,8 @@ TARGET_SIGNALS = [
     # "Scada.GRUN.AGG2.G2.LAGER.M_VIBR1",
     "Scada.GRUN.AGG2.G2.LAGER.M_VIBR2",
 ]
+
+TARGET_NAME = TARGET_SIGNALS[0].split("_")[-1].lower()
 
 # def create_segment_dataset(
 #     signals_dataframe: pd.DataFrame,
@@ -365,19 +366,19 @@ def train_rnn_model(
         for index, target_column in enumerate(target_columns)
     }
 
-    with open("src/rnnModel/metrics_vib2.json","w") as f:
-        json.dump(metrics, f, indent=4)
+    # with open("src/rnnModel/metrics_vib2.json","w") as f:
+    #     json.dump(metrics, f, indent=4)
 
-    model.save("src/rnnModel/hydro_lstm_model_vib2.keras")
+    model.save(f"src/rnnModel/hydro_lstm_model_{TARGET_NAME}.keras")
 
     joblib.dump(
         feature_scaler,
-        "src/rnnModel/feature_scaler_vib2.pkl"
+        f"src/rnnModel/feature_scaler_{TARGET_NAME}.pkl"
     )
 
     joblib.dump(
         target_scaler,
-        "src/rnnModel/target_scaler_vib2.pkl"
+        f"src/rnnModel/target_scaler_{TARGET_NAME}.pkl"
     )
 
     return model, metrics
