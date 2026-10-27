@@ -105,75 +105,75 @@ def step_interpolate(signal:pd.Series,sample_time) -> pd.Series:
 #     # ).fit(sensor_signal.to_numpy())
 # 	# return detector.predict(n_bkps=n_bkps)
 
-def detect_segment_anomalies(
-	segments_features: pd.DataFrame,
-	contamination: float = 0.2,
-) -> pd.DataFrame:
-	"""Flag unusual operating segments using their calculated features."""
-	feature_columns = [
-		"power_mean",
-		"power_std",
-		"speed_mean",
-		"speed_std",
-		"upper_b_temp_mean",
-		"upper_b_temp_std",
-		"lower_b_temp_mean",
-		"lower_b_temp_std",
-		"voltage_mean",
-		"voltage_std"
-	]
-	valid = segments_features.dropna(subset=feature_columns).copy()
+# def detect_segment_anomalies(
+# 	segments_features: pd.DataFrame,
+# 	contamination: float = 0.2,
+# ) -> pd.DataFrame:
+# 	"""Flag unusual operating segments using their calculated features."""
+# 	feature_columns = [
+# 		"power_mean",
+# 		"power_std",
+# 		"speed_mean",
+# 		"speed_std",
+# 		"upper_b_temp_mean",
+# 		"upper_b_temp_std",
+# 		"lower_b_temp_mean",
+# 		"lower_b_temp_std",
+# 		"voltage_mean",
+# 		"voltage_std"
+# 	]
+# 	valid = segments_features.dropna(subset=feature_columns).copy()
 
-	if len(valid) < 10:
-		print("Warning: fewer than 10 segments; anomaly results are exploratory only.")
+# 	if len(valid) < 10:
+# 		print("Warning: fewer than 10 segments; anomaly results are exploratory only.")
 
-	scaler = StandardScaler()
-	features_scaled = scaler.fit_transform(valid[feature_columns])
-	detector = IsolationForest(
-		contamination=contamination,
-		n_estimators=200,
-		random_state=42,
-	)
+# 	scaler = StandardScaler()
+# 	features_scaled = scaler.fit_transform(valid[feature_columns])
+# 	detector = IsolationForest(
+# 		contamination=contamination,
+# 		n_estimators=200,
+# 		random_state=42,
+# 	)
 
-	valid["anomaly"] = detector.fit_predict(features_scaled)
-	valid["anomaly_score"] = -detector.score_samples(features_scaled)
-	return valid
+# 	valid["anomaly"] = detector.fit_predict(features_scaled)
+# 	valid["anomaly_score"] = -detector.score_samples(features_scaled)
+# 	return valid
 
 
-def plot_signals_change_points(datasignal: pd.Series, change_points: list[int]) -> None:
-	"""Plot the complete signal with every detected segment highlighted."""
-	fig, ax = plt.subplots(figsize=(16, 7))
-	plt.plot(datasignal.index, datasignal.values, label=datasignal.name)
+# def plot_signals_change_points(datasignal: pd.Series, change_points: list[int]) -> None:
+# 	"""Plot the complete signal with every detected segment highlighted."""
+# 	fig, ax = plt.subplots(figsize=(16, 7))
+# 	plt.plot(datasignal.index, datasignal.values, label=datasignal.name)
 
-	bounds = [0] + change_points
-	for segment_id, (start, end) in enumerate(zip(bounds[:-1], bounds[1:])):
-		start_time = datasignal.index[start]
-		end_time = datasignal.index[end - 1]
-		if segment_id % 2 == 0:
-			ax.axvspan(start_time, end_time, color="lightblue", alpha=0.2)
-		if end < len(datasignal):
-			ax.axvline(
-				datasignal.index[end],
-				color="red",
-				linestyle="--",
-				linewidth=1,
-			)
-		ax.text(
-			(start_time + (end_time - start_time) / 2),
-			0.98,
-			f"S{segment_id}",
-			transform=ax.get_xaxis_transform(),
-			ha="center",
-			va="top",
-		)
+# 	bounds = [0] + change_points
+# 	for segment_id, (start, end) in enumerate(zip(bounds[:-1], bounds[1:])):
+# 		start_time = datasignal.index[start]
+# 		end_time = datasignal.index[end - 1]
+# 		if segment_id % 2 == 0:
+# 			ax.axvspan(start_time, end_time, color="lightblue", alpha=0.2)
+# 		if end < len(datasignal):
+# 			ax.axvline(
+# 				datasignal.index[end],
+# 				color="red",
+# 				linestyle="--",
+# 				linewidth=1,
+# 			)
+# 		ax.text(
+# 			(start_time + (end_time - start_time) / 2),
+# 			0.98,
+# 			f"S{segment_id}",
+# 			transform=ax.get_xaxis_transform(),
+# 			ha="center",
+# 			va="top",
+# 		)
 
-	ax.set_title("Signal Segments Detected by KernelCPD")
-	ax.set_xlabel("Time")
-	ax.set_ylabel("Value")
-	ax.legend()
-	ax.grid()
-	fig.autofmt_xdate()
-	plt.show()
+# 	ax.set_title("Signal Segments Detected by KernelCPD")
+# 	ax.set_xlabel("Time")
+# 	ax.set_ylabel("Value")
+# 	ax.legend()
+# 	ax.grid()
+# 	fig.autofmt_xdate()
+# 	plt.show()
 
 
 if __name__ == "__main__":
