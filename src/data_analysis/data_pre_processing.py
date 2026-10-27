@@ -3,7 +3,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 import matplotlib.pyplot as plt
-import ruptures as rpt
+# import ruptures as rpt
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
@@ -12,10 +12,45 @@ DATA_FOLDER = (
 	Path(__file__).parent.parent.parent
 	/ "data"
 	/ "raw"
-	/ "2024-06-01_2024-10-31"
+	/ "2025-06-01_2025-10-31"
 )
-MODEL_PATH = Path(__file__).parent.parent / "trained_model.joblib"
 
+REQUIRED_SIGNALS = [
+    "Scada.GRUN.AGG2.G2.MV.M_P_MW",
+	# "Scada.GRUN.AGG2.G2.MAGN.M_I",
+	# "Scada.GRUN.AGG2.TURB2.REG.M_TURT",
+	# "Scada.GRUN.AGG2.TURB2.PADRAG.M_WCKT_POS",
+	# "Scada.GRUN.AGG2.G2.LAGER.M_LAGTMP1",
+	# "Scada.GRUN.AGG2.G2.LAGER.M_LAGTMP4",
+	# "Scada.GRUN.AGG2.G2.LAGER.M_LAGTMP5",
+	# "Scada.GRUN.AGG2.G2.LAGER.M_LAGTMP6",
+	# "Scada.GRUN.AGG2.G2.LAGER.M_OLTMP1",
+	# "Scada.GRUN.AGG2.G2.LAGER.M_OLTMP2",
+	# "Scada.GRUN.AGG2.G2.KJOL.M_KJVANN",
+	"Scada.GRUN.AGG2.G2.LAGER.M_VIBR1",
+	"Scada.GRUN.AGG2.G2.LAGER.M_VIBR2",
+	"Scada.GRUN.AGG2.VANN.SJAKT.M_TRYKK",
+	"Scada.GRUN.AGG2.TURB2.REG.M_VANNSTR",
+	# "Scada.GRUN.AGG2.TURB2.TRYKKOL.M_OLTMP",
+	"Scada.GRUN.AGG2.TURB2.TRYKKOL.M_OLTRYKSW",
+	"Scada.GRUN.AGG2.TURB2.NALER.M_NAL1",
+	"Scada.GRUN.AGG2.TURB2.NALER.M_NAL2",
+	"Scada.GRUN.AGG2.TURB2.NALER.M_NAL3",
+	"Scada.GRUN.AGG2.TURB2.NALER.M_NAL4",
+	"Scada.GRUN.AGG2.TURB2.NALER.M_NAL5"
+]
+
+OUTPUT_FOLDER = (
+    Path(__file__).resolve().parents[2]
+    / "data"
+    / "processed"
+    / "2025_new_interpol"
+)
+
+OUTPUT_FOLDER.mkdir(
+    parents=True,
+    exist_ok=True
+)
 
 def load_signal(file_path: Path) -> pd.Series:
 	"""Load one exported signal as a timestamp-indexed numeric series."""
@@ -30,75 +65,45 @@ def load_signal(file_path: Path) -> pd.Series:
 	return signal.dropna().set_index("timestamp")[file_path.stem].sort_index()
 
 
-def detect_change_points(
-	sensor_signal: pd.Series,
-	n_bkps: int = 5,
-) -> list[int]:
-	# detector = rpt.Pelt(
-	# 		model="l2",
-	# 		min_size=50,
-	# 		jump=20,
-	# 	).fit(sensor_signal.to_numpy())
+def remove_zeros(series:pd.Series) -> pd.Series:
+
+	return series[series != 0.0]
+
+
+def step_interpolate(signal:pd.Series,sample_time) -> pd.Series:
+
+	time = f"{sample_time}"
+	signal = (
+		signal
+		.resample(time)
+		.ffill()
+	)
+
+	return signal
+
+
+
+# def detect_change_points(
+# 	sensor_signal: pd.Series,
+# 	penalty: float = 10.0,
+# ) -> list[int]:
+# 	detector = rpt.Pelt(
+# 			model="l2",
+# 			jump=10,
+# 		).fit(sensor_signal.to_numpy())
 	
-	# return detector.predict(pen=penalty)
-	detector = rpt.KernelCPD(
-		kernel="rbf",
-		min_size=50,
-		jump=20,
-	).fit(sensor_signal.to_numpy())
-	# detector = rpt.Binseg(
-    #     model="l2",
-    #     min_size=50,
-    #     jump=20,
-    # ).fit(sensor_signal.to_numpy())
-	return detector.predict(n_bkps=n_bkps)
-
-
-
-
-def calculate_segments_features(
-		power: pd.Series,
-		speed: pd.Series,
-		upper_bearing_temp: pd.Series,
-		lower_bearing_temp: pd.Series,
-		voltage: pd.Series,
-		change_points: list[int]
-	) -> pd.DataFrame:
-	signals = pd.concat(
-		{
-			"power": power,
-			"speed": speed,
-			"upper_bearing_temp": upper_bearing_temp,
-			"lower_bearing_temp": lower_bearing_temp,
-			"voltage": voltage
-		}, axis=1).sort_index()
-
-	bounds = [0] + change_points
-	rows = []
-
-	for segments_id, (start,end) in enumerate(zip(bounds[:-1],bounds[1:])):
-		start_time = power.index[start]
-		end_time = power.index[end-1]
-
-		segment = signals.loc[start_time:end_time]
-
-		rows.append({
-			"segment_id": segments_id,
-			"start_time": start_time,
-			"end_time": end_time,
-			"power_mean": segment["power"].mean(),
-			"power_std": segment["power"].std(),
-			"speed_mean": segment["speed"].mean(),
-			"speed_std": segment["speed"].std(),
-			"upper_b_temp_mean": segment["upper_bearing_temp"].mean(),
-			"upper_b_temp_std": segment["upper_bearing_temp"].std(),
-			"lower_b_temp_mean": segment["lower_bearing_temp"].mean(),
-			"lower_b_temp_std": segment["lower_bearing_temp"].std(),
-			"voltage_mean":segment["voltage"].mean(),
-			"voltage_std": segment["voltage"].std()
-		})
-	return pd.DataFrame(rows)
-
+# 	return detector.predict(pen=penalty)
+# 	# detector = rpt.KernelCPD(
+# 	# 	kernel="rbf",
+# 	# 	min_size=50,
+# 	# 	jump=20,
+# 	# ).fit(sensor_signal.to_numpy())
+# 	# detector = rpt.Binseg(
+#     #     model="l2",
+#     #     min_size=50,
+#     #     jump=20,
+#     # ).fit(sensor_signal.to_numpy())
+# 	# return detector.predict(n_bkps=n_bkps)
 
 def detect_segment_anomalies(
 	segments_features: pd.DataFrame,
@@ -133,8 +138,6 @@ def detect_segment_anomalies(
 	valid["anomaly"] = detector.fit_predict(features_scaled)
 	valid["anomaly_score"] = -detector.score_samples(features_scaled)
 	return valid
-
-		
 
 
 def plot_signals_change_points(datasignal: pd.Series, change_points: list[int]) -> None:
@@ -174,24 +177,35 @@ def plot_signals_change_points(datasignal: pd.Series, change_points: list[int]) 
 
 
 if __name__ == "__main__":
-	power = load_signal(DATA_FOLDER / "Scada.GRUN.AGG1.G1.MV.M_P.csv")
-	speed = load_signal(DATA_FOLDER / "Scada.GRUN.AGG1.TURB1.MV.M_TURTALL.csv")
-	upper_bearing_temp = load_signal(DATA_FOLDER / "Scada.GRUN.AGG1.G1.SSSTYLAG.M_LAGTMP.csv")
-	lower_bearing_temp = load_signal(DATA_FOLDER / "Scada.GRUN.AGG1.G1.DSSTYLAG.M_LAGTMP.csv")
-	voltage = load_signal(DATA_FOLDER / "Scada.GRUN.AGG1.G1.MV.M_U.csv")
 
-	change_points = detect_change_points(power)
+	for file_path in sorted(DATA_FOLDER.glob("*.csv")):
 
-	segments_features = calculate_segments_features(power, speed, upper_bearing_temp, lower_bearing_temp, voltage, change_points)
+		if file_path.stem not in REQUIRED_SIGNALS:
+			continue
 
-	# segments_features.to_csv("segments_features.csv", index=False)
-	segments_with_anomalies = detect_segment_anomalies(segments_features)
-	print("\nSegment anomaly results:")
-	print(
-		segments_with_anomalies[
-			["segment_id", "start_time", "end_time", "anomaly", "anomaly_score"]
-		].to_string(index=False)
-	)
-	print(f"\nThe length of the segments_with_anomalies DataFrame is: {len(segments_with_anomalies)}")
+		print(f"Processing {file_path.name}")
 
-	plot_signals_change_points(power, change_points)
+		signal = load_signal(file_path)
+
+		# Only remove zeros from vibration signals
+		if "M_VIBR" in file_path.stem:
+			signal = remove_zeros(signal)
+
+		inter_signal = step_interpolate(
+			signal=signal,
+			sample_time="2s"
+		)
+
+		output_path = OUTPUT_FOLDER / file_path.name
+
+		(
+			inter_signal
+			.to_frame()
+			.reset_index()
+			.to_csv(
+				output_path,
+				index=False
+			)
+		)
+
+	
