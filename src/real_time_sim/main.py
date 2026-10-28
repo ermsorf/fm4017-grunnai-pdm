@@ -1,10 +1,15 @@
 import numpy as np
 import pandas as pd
-import time
 import joblib
+import json
 from pathlib import Path
 from tensorflow.keras.models import load_model
 from src.data_analysis.data_pre_processing import load_signal
+from src.real_time_sim.replay_engine import ReplayEngine
+from src.real_time_sim.prediction_engine import PredictionEngine
+from src.real_time_sim.health_monitor import HealthMonitor
+from src.real_time_sim.simulator_state import SimulatorState
+
 
 TEST_FOLDER = (
     Path(__file__).resolve().parents[2]
@@ -42,9 +47,15 @@ TARGET_SIGNALS = [
 
 if __name__ == "__main__":
 
-    # model = load_model(f"src/rnnModel/hydro_lstm_model_{}.keras")
-    # feature_scaler = joblib.load(f"src/rnnModel/feature_scaler_{}.pkl")
-    # target_scaler = joblib.load(f"src/rnnModel/target_scaler_{}.pkl")
+    vibr1_model = load_model(f"src/rnnModel/hydro_lstm_model_vibr1.keras")
+    vibr2_model = load_model(f"src/rnnModel/hydro_lstm_model_vibr2.keras")
+
+    feature_scaler_vib1 = joblib.load(f"src/rnnModel/feature_scaler_vibr1.pkl")
+    feature_scaler_vib2 = joblib.load(f"src/rnnModel/feature_scaler_vibr2.pkl")
+
+
+    target_scaler_vib1 = joblib.load(f"src/rnnModel/target_scaler_vibr1.pkl")
+    target_scaler_vib2 = joblib.load(f"src/rnnModel/target_scaler_vibr2.pkl")
 
     required_signals = PROCESS_SIGNALS + TARGET_SIGNALS
 
@@ -70,4 +81,88 @@ if __name__ == "__main__":
         .dropna()
     )
 
-    print(test_df.head())
+    print(f"Testing Dataset Build: \n{test_df.head()}")
+
+    engine = ReplayEngine(dataframe=test_df, speed=100)
+
+    predictor = PredictionEngine(
+        window_size=120,
+        process_signals=PROCESS_SIGNALS,
+
+        vibr1_model=vibr1_model,
+        vibr2_model=vibr2_model,
+
+        feature_scaler_vibr1=feature_scaler_vib1,
+        feature_scaler_vibr2=feature_scaler_vib2,
+
+        target_scaler_vibr1=target_scaler_vib1,
+        target_scaler_vibr2=target_scaler_vib2
+    )
+
+    monitor = HealthMonitor(
+        warning_threshold=0.5,
+        alarm_threshold=1.0
+    )
+
+    state = SimulatorState()
+
+    print("Data & Model Loaded.")
+    print("Simulator Starting...")
+
+    for timestamp, row in engine.stream():
+
+        prediction = predictor.update(
+            row
+        )
+
+        if prediction is None:
+            continue
+
+        actual_vibr1 = row[
+            "Scada.GRUN.AGG2.G2.LAGER.M_VIBR1"
+        ]
+
+        actual_vibr2 = row[
+            "Scada.GRUN.AGG2.G2.LAGER.M_VIBR2"
+        ]
+
+        residual_vibr1 = abs(
+            actual_vibr1
+            - prediction["vibr1"]
+        )
+
+        residual_vibr2 = abs(
+            actual_vibr2
+            - prediction["vibr2"]
+        )
+
+        health_score, status = monitor.evaluate(
+            residual_vibr1,
+            residual_vibr2
+        )
+
+        latest_data = {
+            "timestamp": str(timestamp),
+
+            "actual_vibr1": float(actual_vibr1),
+            "predicted_vibr1": float(prediction["vibr1"]),
+
+            "actual_vibr2": float(actual_vibr2),
+            "predicted_vibr2": float(prediction["vibr2"]),
+
+            "health_score": float(health_score),
+            "status": status
+        }
+
+        with open(
+            "src/real_time_sim/realtime.json",
+            "w"
+        ) as f:
+
+            json.dump(
+                latest_data,
+                f,
+                indent=4
+            )
+
+
