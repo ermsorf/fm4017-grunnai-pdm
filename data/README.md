@@ -1,6 +1,16 @@
 # Data folder
 This is the data folder, where all raw and processed data are placed. This data is not included in the GitHub Repo, but will have to be acquired elsewhere and placed in this folder according to this README, and the subfolders. 
 
+## Data-quality notes
+
+- The efficiency values in `Hydrocord.Eta.G2_ETA_Value(=D1=LE1=LE1).csv` **should be excluded from analysis**.
+- Generator 1 active power values slightly below zero during standstill can be ignored.
+- Generator 1 turbine speed is represented as a percentage, not RPM.
+- Short-term runaway values above 100% may occur in the Generator 1 turbine-speed signal.
+- Both turbines are Pelton turbines with five injector-opening signals, not wicket gates.
+
+- Every signal only stores new values if new values are significantly different from previously recorded sample based on thresholds. If a signal seems sparse, it is likely very stable, not stale. 
+
 ## Sensor Documentation
 
 Sensor files located under `data/raw` for the periods:
@@ -83,11 +93,4 @@ These files contain the openings of the five Pelton turbine injectors:
 | `Scada.GRUN.AGG2.TURB2.TRYKKOL.M_OLTRYKSW.csv` | Turbine 2 pressure-oil pressure |  |
 | `Scada.GRUN.AGG2.VANN.SJAKT.M_TRYKK.csv` | Water pressure | Measurement from the control system. This differs from the Hydrocord penstock-pressure sensor, which also calculates an average. |
 
-## Data-quality notes
-
-- The efficiency values in `Hydrocord.Eta.G2_ETA_Value(=D1=LE1=LE1).csv` should be excluded from analysis.
-- Generator 1 active power values slightly below zero during standstill can be ignored.
-- Generator 1 turbine speed is represented as a percentage, not RPM.
-- Short-term runaway values above 100% may occur in the Generator 1 turbine-speed signal.
-- Both turbines are Pelton turbines with five injector-opening signals, not wicket gates.
 
