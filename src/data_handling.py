@@ -52,12 +52,16 @@ def select_data_files(
 
 def load_signal(file_path: str | Path) -> pd.DataFrame:
     """Load one signal CSV into normalized timestamp/value columns."""
-    signal = pd.read_csv(
-        file_path,
-        header=None,
-        skiprows=2,
-        names=["timestamp", "value"],
-    )
+    raw = pd.read_csv(file_path, header=None, usecols=[0, 1])
+    if raw.shape[1] < 2:
+        raise ValueError(f"Signal file must contain timestamp and value columns: {file_path}")
+
+    first_timestamp = pd.to_datetime(raw.iloc[0, 0], errors="coerce")
+    if pd.isna(first_timestamp):
+        raw = raw.iloc[1:]
+
+    signal = raw.iloc[:, :2].copy()
+    signal.columns = ["timestamp", "value"]
     signal["timestamp"] = pd.to_datetime(signal["timestamp"], errors="coerce")
     signal["value"] = pd.to_numeric(signal["value"], errors="coerce")
     return signal

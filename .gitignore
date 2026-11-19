@@ -4,7 +4,10 @@
 .legacy/
 
 .csv
-
+**/models/**
+**/plots/**
+**/graphics/**
+**/report/**
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
