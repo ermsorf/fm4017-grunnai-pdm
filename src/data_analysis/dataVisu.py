@@ -4,19 +4,41 @@ from tkinter import messagebox, ttk
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
+import src.config
 
-DATA_FOLDER = Path(__file__).parent.parent.parent / "data" / "processed" / "2024-01-01_2024-12-31_step_interpolation_10s"
+# DATA_FOLDER = src.config.DATA_RAW_2024
+# DATA_FOLDER = Path(__file__).parent.parent.parent / "data" / "processed" / "2024-01-01_2024-12-31_step_interpolation_10s"
+# DATA_FOLDER = Path("C:/github/fm4017-grunnai-pdm/src/rnn/data")
+DATA_FOLDER = Path(r"C:/github/fm4017-grunnai-pdm/data/processed/2025-06-02_2025-10-31_stepinterp_2s_smooth")
 
 
 def load_signal(file_path: Path) -> pd.Series:
-	"""Read this project's CSV format: identifier, unit, then timestamp/value rows."""
-	raw = pd.read_csv(file_path, header=None, skiprows=2, names=["time", "value"])
-	raw["time"] = pd.to_datetime(raw["time"], errors="coerce")
-	raw["value"] = pd.to_numeric(raw["value"], errors="coerce")
-	raw = raw.dropna(subset=["time", "value"]).set_index("time")
-	return raw["value"].rename(file_path.stem)
+	"""Load the timestamp and value column from a processed signal CSV.
+
+	Processed files also contain preprocessing columns such as ``_mask`` and
+	``_age``. Only the column whose header contains ``value`` is plotted.
+	"""
+	raw = pd.read_csv(file_path)
+	value_columns = [
+		column
+		for column in raw.columns
+		if "value" in str(column).lower()
+	]
+	if "timestamp" not in raw.columns:
+		raise ValueError(f"Expected a 'timestamp' column in {file_path.name}")
+	if not value_columns:
+		raise ValueError(f"No column containing 'value' found in {file_path.name}")
+
+	value_column = value_columns[0]
+	signal = pd.DataFrame(
+		{
+			"time": pd.to_datetime(raw["timestamp"], errors="coerce"),
+			"value": pd.to_numeric(raw[value_column], errors="coerce"),
+		}
+	).dropna(subset=["time", "value"])
+	return signal.set_index("time")["value"].rename(file_path.stem)
 
 
 class SignalViewer(tk.Tk):
@@ -40,8 +62,12 @@ class SignalViewer(tk.Tk):
 		self.listbox.pack(side="left", fill="y")
 
 		self.figure, self.axes = plt.subplots(figsize=(9, 5))
-		self.canvas = FigureCanvasTkAgg(self.figure, master=body)
-		self.canvas.get_tk_widget().pack(side="right", fill="both", expand=True, padx=(10, 0))
+		plot_area = ttk.Frame(body)
+		plot_area.pack(side="right", fill="both", expand=True, padx=(10, 0))
+		self.canvas = FigureCanvasTkAgg(self.figure, master=plot_area)
+		self.canvas.get_tk_widget().pack(side="bottom", fill="both", expand=True)
+		self.toolbar = NavigationToolbar2Tk(self.canvas, plot_area)
+		self.toolbar.update()
 
 		self.load_signals()
 
@@ -81,6 +107,8 @@ class SignalViewer(tk.Tk):
 		self.axes.grid(True, alpha=0.3)
 		self.axes.legend(fontsize="small")
 		self.figure.autofmt_xdate()
+		self.axes.relim()
+		self.axes.autoscale_view()
 		self.canvas.draw()
 
 
