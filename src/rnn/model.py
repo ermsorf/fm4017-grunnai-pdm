@@ -23,7 +23,11 @@ class RNNModel(torch.nn.Module):
         self.num_layers = num_layers
         self.training_history: TrainingHistory | None = None
         self.rnn = torch.nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
-        self.fc = torch.nn.Linear(hidden_size, output_size)
+        self.fc = torch.nn.Sequential(
+            torch.nn.Linear(hidden_size, 16),
+            torch.nn.ReLU(),
+            torch.nn.Linear(16, output_size)
+        )
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         requested_device = torch.device(device)
@@ -69,8 +73,9 @@ class RNNModel(torch.nn.Module):
         if validation_data is not None and len(validation_data[0]) == 0:
             raise ValueError("validation data must not be empty")
 
+
         criterion = torch.nn.MSELoss()
-        optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
+        optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate, weight_decay=1e-3)
         batches = torch.utils.data.DataLoader(
             torch.utils.data.TensorDataset(x_train, y_train),
             batch_size=batch_size,
