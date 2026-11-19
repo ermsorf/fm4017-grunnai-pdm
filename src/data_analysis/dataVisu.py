@@ -6,10 +6,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
+import src.config
 
+# DATA_FOLDER = src.config.DATA_RAW_2024
 # DATA_FOLDER = Path(__file__).parent.parent.parent / "data" / "processed" / "2024-01-01_2024-12-31_step_interpolation_10s"
 # DATA_FOLDER = Path("C:/github/fm4017-grunnai-pdm/src/rnn/data")
-DATA_FOLDER = Path(r"C:/github/fm4017-grunnai-pdm/src/rnn/data/step_interp_10s")
+DATA_FOLDER = Path(r"C:/github/fm4017-grunnai-pdm/data/processed/2025-06-02_2025-10-31_stepinterp_2s_smooth")
 
 
 def load_signal(file_path: Path) -> pd.Series:
