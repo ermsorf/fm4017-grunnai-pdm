@@ -3,7 +3,9 @@
 !data/*.md
 .legacy/
 
-.csv
+**.csv
+*.pdf
+
 **/models/**
 **/plots/**
 **/graphics/**
