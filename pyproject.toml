@@ -11,6 +11,7 @@ dependencies = [
     "numpy",
     "pandas",
     "scikit-learn",
+    "scipy",
     "torch",
     "xgboost>=2.0",
 ]
