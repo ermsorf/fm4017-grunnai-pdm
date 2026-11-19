@@ -4,9 +4,10 @@ matplotlib
 shutil
 pathlib
 scikit-learn
+scipy
 torch
 xgboost>=2.0
-
+cupy
 pytest
 
 setuptools<81
